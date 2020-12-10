@@ -5,7 +5,6 @@ pip3 install torch
 
 Data Required
 ----
-Currently using an english to french dataset found here:https://www.manythings.org/anki/
-The document expects the file to be named en-fr.txt
-Will likely move on from that going forward.
+Currently using datasets found here:https://www.manythings.org/anki/
+
 
