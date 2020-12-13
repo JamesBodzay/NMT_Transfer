@@ -495,6 +495,9 @@ def baseline_word(label, src_vocab_B, target_vocab_B, train_X_B, test_X_B, iters
     '''
     
     hidden_size = 256
+    print("Experiment: Baseline [Word]")
+    print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, 0, iters_B))
+    print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH))
     encoder = EncoderRNN(src_vocab_B.n_words, hidden_size).to(device)
     attention = BahdanauAttention(hidden_size).to(device)
     decoder = DecoderRNN(hidden_size, target_vocab_B.n_words, attention).to(device)
@@ -515,7 +518,8 @@ def baseline_word(label, src_vocab_B, target_vocab_B, train_X_B, test_X_B, iters
     filename = '%s/translator_final.dump'  % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-
+    print("Final Loss: %d Validation Bleu: %d" % (losses[-1], validation_bleu))
+    print("==========")
     return losses, validation_bleu, translator
 
 def baseline_char(label, alphabet, train_X_B, test_X_B, iters_B):
@@ -531,6 +535,10 @@ def baseline_char(label, alphabet, train_X_B, test_X_B, iters_B):
     '''
     
     hidden_size = 256
+    print("Experiment: Baseline [Char]")
+    print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, 0, iters_B))
+    print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH_CHAR))
+
     encoder = EncoderRNN(alphabet.n_chars, hidden_size).to(device)
     attention = BahdanauAttention(hidden_size).to(device)
     decoder = DecoderRNN(hidden_size, alphabet.n_chars, attention=attention).to(device)
@@ -551,7 +559,8 @@ def baseline_char(label, alphabet, train_X_B, test_X_B, iters_B):
     filename = '%s/translator_final.dump'  % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-
+    print("Final Loss: %d Validation Bleu: %d" % (losses[-1], validation_bleu))
+    print("==========")
     return losses, validation_bleu, translator
 
 def transfer_all(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B):
@@ -571,6 +580,9 @@ def transfer_all(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B):
     '''
     
     hidden_size = 256
+    print("Experiment: Transfer All")
+    print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, iters_A, iters_B))
+    print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH_CHAR))
     encoder = EncoderRNN(alphabet.n_chars, hidden_size).to(device)
     attention = BahdanauAttention(hidden_size).to(device)
     decoder = DecoderRNN(hidden_size, alphabet.n_chars, attention).to(device)
@@ -593,7 +605,8 @@ def transfer_all(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B):
     filename = '%s/translator_final.dump'  % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-
+    print("Final Loss: %d Validation Bleu: %d" % (losses_B[-1], validation_bleu))
+    print("==========")
     return losses_B, validation_bleu, translator
     
 
@@ -615,6 +628,9 @@ def transfer_decoder(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B
     '''
     
     hidden_size = 256
+    print("Experiment: Transfer Decoder and Attention")
+    print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, iters_A, iters_B))
+    print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH_CHAR))
     #PreTrain
     encoder = EncoderRNN(alphabet.n_chars, hidden_size).to(device)
     attention = BahdanauAttention(hidden_size).to(device)
@@ -642,7 +658,8 @@ def transfer_decoder(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B
     filename = '%s/translator_final.dump' % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-
+    print("Final Loss: %d Validation Bleu: %d" % (losses_B[-1], validation_bleu))
+    print("==========")
     return losses_B, validation_bleu, translator
 
 def transfer_attention_word(label, src_vocab_A, target_vocab_A, X_A, src_vocab_B, target_vocab_B, train_X_B, test_X_B, iters_A, iters_B):
@@ -660,6 +677,10 @@ def transfer_attention_word(label, src_vocab_A, target_vocab_A, X_A, src_vocab_B
     '''
     
     hidden_size = 256
+
+    print("Experiment: Transfer Attention [Word]")
+    print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, iters_A, iters_B))
+    print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH))
     #PreTrain
     encoder = EncoderRNN(src_vocab_A.n_words, hidden_size).to(device)
     attention = BahdanauAttention(hidden_size).to(device)
@@ -688,7 +709,8 @@ def transfer_attention_word(label, src_vocab_A, target_vocab_A, X_A, src_vocab_B
     filename = '%s/translator_final.dump' % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-
+    print("Final Loss: %d Validation Bleu: %d" % (losses_B[-1], validation_bleu))
+    print("==========")
     return losses_B, validation_bleu, translator
 
 def transfer_attention_char(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B):
@@ -708,6 +730,9 @@ def transfer_attention_char(label, alphabet, X_A, train_X_B, test_X_B, iters_A, 
     '''
     
     hidden_size = 256
+    print("Experiment: Transfer Attention [CHAR]")
+    print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, iters_A, iters_B))
+    print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH_CHAR))
     #PreTrain
     encoder = EncoderRNN(alphabet.n_chars, hidden_size).to(device)
     attention = BahdanauAttention(hidden_size).to(device)
@@ -736,7 +761,8 @@ def transfer_attention_char(label, alphabet, X_A, train_X_B, test_X_B, iters_A, 
     filename = '%s/translator_final.dump' % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-
+    print("Final Loss: %d Validation Bleu: %d" % (losses_B[-1], validation_bleu))
+    print("==========")
     return losses_B, validation_bleu, translator
 
 #If going to transfer encoder/decoder, the encoder and decoder need to be the same dimensionality.
@@ -758,8 +784,11 @@ def transfer_encoder_attention(label, alphabet, X_A, train_X_B, test_X_B, iters_
      - the bleu score found from the validation set provided.
      - the translator itself.
     '''
-    
     hidden_size = 256
+
+    print("Experiment: Transfer Encoder and Attention")
+    print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, iters_A, iters_B))
+    print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH_CHAR))
     #PreTrain
     encoder = EncoderRNN(alphabet.n_chars, hidden_size).to(device)
     attention = BahdanauAttention(hidden_size).to(device)
@@ -788,6 +817,8 @@ def transfer_encoder_attention(label, alphabet, X_A, train_X_B, test_X_B, iters_
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
 
+    print("Final Loss: %d Validation Bleu: %d" % (losses_B[-1], validation_bleu))
+    print("==========")
     return losses_B, validation_bleu, translator
 
 
@@ -797,40 +828,48 @@ def run_experiments(pretrain_iterations, test_iterations):
     #Finnish
     src_F, target_F, alph, X_F = readLangs('en-fn.txt', 'en', 'fn', alph)
     #Estonian
-    src_E, target_E, alph,  X_E = readLangs('en-es.txt', 'en', 'es', alph)
+    src_E, target_E, alph, X_E = readLangs('en-es.txt', 'en', 'es', alph)
     #Swedish
-    src_E, target_E, alph, X_E = readLangs('en-sw.txt', 'en', 'sw', alph)
+    src_SW, target_SW, alph, X_SW = readLangs('en-sw.txt', 'en', 'sw', alph)
     #Slovak
-    src_E, target_E, alph, X_E = readLangs('en-sk.txt', 'en', 'sk', alph)
+    src_SK, target_SK, alph, X_SK = readLangs('en-sk.txt', 'en', 'sk', alph)
     #Czech
-    src_E, target_E, alph, X_E = readLangs('en-cz.txt', 'en', 'cz', alph)
+    src_C, target_C, alph, X_C = readLangs('en-cz.txt', 'en', 'cz', alph)
 
     #Hungarian/Finnish
-    src_CH, target_CH, alph, X_CH = readComboLangs('en-hu.txt','en-fn.txt' 'en', 'hu-fn', alph)
+    src_HF, target_HF, alph, X_HF = readComboLangs('en-hu.txt','en-fn.txt' 'en', 'hu-fn', alph)
 
     #Swedish/Finnish
-    src_CH, target_CH, alph, X_CH = readComboLangs('en-sw.txt','en-fn.txt' 'en', 'sw-fn', alph)
+    src_SF, target_SF, alph, X_SF = readComboLangs('en-sw.txt','en-fn.txt' 'en', 'sw-fn', alph)
 
     #Czech/Hungarian
     src_CH, target_CH, alph, X_CH = readComboLangs('en-hu.txt','en-cz.txt' 'en', 'cz-hu', alph)
 
+    train_X_H, test_X_H = train_test_split(X_H, test_size = 0.2, train_size=0.8)
+
+    train_X_F, test_X_F = train_test_split(X_F, test_size = 0.2, train_size=0.8)
 
     # Finnish Translator Exps.
 
     # BASELINE EN - FI
-    
+    baseline_char('en_fi', alph, train_X_F, test_X_F, 5000)
+    baseline_word('en_fi', src_F, target_F, train_X_F, test_X_F)
+
     # GENETIC EN - HU => EN - FI
-
+    transfer_all('hu-fi',alph, x_H, train_X_F, test_X_F, 75000, 5000)
     # REGIONAL EN - SW => EN - FI
-
+    transfer_all('sw-fi',alph, x_SW, train_X_F, test_X_F, 75000, 5000)
     # COMBO GENETIC EN - HU/FI => EN - FI
+    transfer_all('combo-hu-fi',alph, x_HF, train_X_F, test_X_F, 75000, 5000)
 
     # COMBO REGIONAL EN - SW/FI => EN -FI
+    transfer_all('combo-sw-fi',alph, x_SF, train_X_F, test_X_F, 75000, 5000)
 
     # Hungarian Translator Exps.
 
     # BASELINE EN - HU
-    
+    baseline_char('en_hu', alph, train_X, test_X, 75000)
+
     # GENETIC EN - FI => EN - HU
 
     # REGIONAL EN - CZ => EN - HU
