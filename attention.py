@@ -822,7 +822,54 @@ def transfer_encoder_attention(label, alphabet, X_A, train_X_B, test_X_B, iters_
     return losses_B, validation_bleu, translator
 
 
-def run_experiments(pretrain_iterations, test_iterations):
+def run_model_experiments(pretrain_iterations, test_iterations):
+    #Hungarian
+    src_H, target_H, alph, X_H = readLangs('en-hu.txt', 'en', 'hu')
+    #Finnish
+    src_F, target_F, alph, X_F = readLangs('en-fn.txt', 'en', 'fn', alph)
+    
+    train_X_F, test_X_F = train_test_split(X_F, test_size = 0.2, train_size=0.8)
+
+    #Word Based
+    dt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    fig, ax = plt.subplots()
+
+    losses, _ , _ = baseline_word('model_test', src_F, target_F,train_X_F, test_X_F, test_iterations)
+    #Increment the x axis in steps of the default plot rate. This is a bit of a quick hack.
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Baseline")
+
+    losses, _, _ = transfer_attention_word('model_test', src_H, target_H, X_H, src_F, target_F, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Pretrained Attention")
+
+    ax.set(xlabel='Epoch', ylabel='Average Negative Log Likelihood', title='Word Based Model Training Error')
+    ax.legend()
+    fig.savefig("word_based_models_%s.png" % (dt))
+
+    #Char based
+
+    fig, ax = plt.subplots()
+
+    losses, _, _ = baseline_char('model_test', alph, train_X_F, test_X_F, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Baseline")
+
+    losses, _, _ = transfer_all('model_test', alph, X_H, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Pretrained Whole Model")
+
+    losses, _, _ = transfer_encoder_attention('model_test', alph, X_H, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Pretrained Encoder and Attention")
+
+    losses, _, _ = transfer_decoder('model_test', alph, X_H, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Pretrained Decoder and Attention")
+
+    losses, _, _ = transfer_attention_char('model_test', alph, X_H, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Pretrained Attention")
+
+    ax.set(xlabel='Epoch', ylabel='Average Negative Log Likelihood', title='Char Based Model Training Error')
+    ax.legend()
+    fig.savefig("word_based_models_%s.png" % (dt))
+
+
+def run_lang_experiments(pretrain_iterations, test_iterations):
     #Hungarian
     src_H, target_H, alph, X_H = readLangs('en-hu.txt', 'en', 'hu')
     #Finnish
@@ -852,23 +899,24 @@ def run_experiments(pretrain_iterations, test_iterations):
     # Finnish Translator Exps.
 
     # BASELINE EN - FI
-    baseline_char('en_fi', alph, train_X_F, test_X_F, 5000)
-    baseline_word('en_fi', src_F, target_F, train_X_F, test_X_F)
+    baseline_char('en_fi', alph, train_X_F, test_X_F, test_iterations)
+    baseline_word('en_fi', src_F, target_F, train_X_F, test_X_F, test_iterations)
 
     # GENETIC EN - HU => EN - FI
-    transfer_all('hu-fi',alph, x_H, train_X_F, test_X_F, 75000, 5000)
+    transfer_all('hu-fi',alph, x_H, train_X_F, test_X_F, pretrain_iterations, test_iterations)
     # REGIONAL EN - SW => EN - FI
-    transfer_all('sw-fi',alph, x_SW, train_X_F, test_X_F, 75000, 5000)
+    transfer_all('sw-fi',alph, x_SW, train_X_F, test_X_F, pretrain_iterations, test_iterations)
     # COMBO GENETIC EN - HU/FI => EN - FI
-    transfer_all('combo-hu-fi',alph, x_HF, train_X_F, test_X_F, 75000, 5000)
+    transfer_all('combo-hu-fi',alph, x_HF, train_X_F, test_X_F, pretrain_iterations, test_iterations)
 
     # COMBO REGIONAL EN - SW/FI => EN -FI
-    transfer_all('combo-sw-fi',alph, x_SF, train_X_F, test_X_F, 75000, 5000)
+    transfer_all('combo-sw-fi',alph, x_SF, train_X_F, test_X_F, pretrain_iterations, test_iterations)
 
     # Hungarian Translator Exps.
 
     # BASELINE EN - HU
-    baseline_char('en_hu', alph, train_X, test_X, 75000)
+    baseline_char('en_hu', alph, train_X, test_X, test_iterations)
+    baseline_word('en_hu', src_H, target_H, train_X_H, test_X_H, test_iterations)
 
     # GENETIC EN - FI => EN - HU
 
@@ -899,7 +947,8 @@ def quick_test():
 
 if __name__ == "__main__":
 
-    quick_test()
+    # quick_test()
+    run_model_experiments(1000, 1000)
     # src, target, X = readLangs()
     # hidden_size = 256
     # encoder = EncoderRNN(src.n_words, hidden_size).to(device)
