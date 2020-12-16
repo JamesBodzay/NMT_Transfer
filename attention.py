@@ -16,18 +16,18 @@ import matplotlib.ticker as ticker
 from sklearn.model_selection import train_test_split
 
 import unicodedata
-import re
+#import re
+import regex as re
 import numpy as np
 import random
 import os
 import io
 import time
 import datetime
+import argparse
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-print(device)
 
 START_TOKEN_INDEX = 0
 END_TOKEN_INDEX = 1
@@ -123,26 +123,16 @@ def unicodeToAscii(s):
 '''
 Preprocess sequence of words given language
 '''
-def preprocess(sentence, language = 'unspecified'):
+def preprocess(sentence, language = 'unspecified', use_diacritics = True):
 
     # print("in: %s" %(sentence))
-    sentence = unicodeToAscii(sentence.lower().strip())
-    #Remove non alphabet characters This needs some consideration for languages with diacritics
-    sentence = re.sub(r"([.!?])", r" \1", sentence)
-    sentence  = re.sub(r"[^a-zA-Z]+", r" ", sentence)
-
-
-    #Language specific processing
-    if language is 'unspecified':
-        pass
-    elif language is 'en':
-        pass
-    elif language is 'hu':
-        pass
-    elif language is 'ro':
-        pass
-    elif language is 'fi':
-        pass
+    if use_diacritics:
+        sentence = re.sub(r"([.!?])", r" \1", sentence)
+        sentence  = re.sub(r"[^\p{L}]+", r" ", sentence)
+    else:
+        sentence = unicodeToAscii(sentence.lower().strip())
+        sentence = re.sub(r"([.!?])", r" \1", sentence)
+        sentence  = re.sub(r"[^a-zA-Z]+", r" ", sentence)
 
     # print("out: %s" %(sentence))
 
@@ -153,11 +143,10 @@ Only accept a subset of the data to make training times shorter.
 '''
 def meetsDataRequirements(sentence):
     if len(sentence.split(' ')) < MAX_SENTENCE_LENGTH and len(sentence) < MAX_SENTENCE_LENGTH_CHAR:
-        #  and sentence.startswith('I'):
         return True
     return False
 
-def readLangs(corpus, source_lang, target_lang, alphabet = None):
+def readLangs(corpus, source_lang, target_lang, alphabet = None, source_vocab = None):
     '''
     Read lines from corpus file into the source and target language.
     If an alphabet has been passed, add characters to that alphabet in order to build up  a communal alphabet
@@ -168,33 +157,106 @@ def readLangs(corpus, source_lang, target_lang, alphabet = None):
     - sentence pairs for the two languages (which can be used as input data to the models)
     '''
 
-
-    #The quick test data is tab split i.e each line is "English Sentence \t Phrase Francais"
+    #The data is tab split i.e each line is "English Sentence \t Phrase Francais"
     lines = open(corpus,encoding='utf-8').read().strip().split('\n')
 
     #Create the dictionaries for both languages and return the sentence pairs
     pairs = []
 
-    source_vocab = Vocab(source_lang)
     target_vocab = Vocab(target_lang)
 
     if alphabet is None:
         alphabet = Alphabet()
+
+    if source_vocab is None:
+        source_vocab = Vocab(source_lang)
     
     # print(lines)
-
+    count = 0
     for line in lines:
         sentences = line.split('\t')
         source =  preprocess(sentences[0], source_lang)
         target = preprocess(sentences[1], target_lang)
         if meetsDataRequirements(source):
+            count += 1
             pairs.append([source, target])
             source_vocab.addSentence(source)
             target_vocab.addSentence(target)
             alphabet.addSentence(source)
             alphabet.addSentence(target)
 
-    print('Read Data: Source Unique Words: %d Target Unique Words: %d Alphabet Unique Chars: %d' % (source_vocab.n_words, target_vocab.n_words, alphabet.n_chars))
+    print('Read %s: Source Unique Words: %d Target Unique Words: %d Alphabet Unique Chars: %d Num Lines: %d' % (corpus,
+                                                                                                                source_vocab.n_words,
+                                                                                                                target_vocab.n_words,
+                                                                                                                alphabet.n_chars,
+                                                                                                                count))
+    return source_vocab, target_vocab, alphabet, pairs
+
+def readComboLangs(corpusA,corpusB, source_lang, target_lang, alphabet = None, source_vocab = None,max_of_a=10000, max_of_b=1000):
+    '''
+    Read lines from two corpus files into the source and target language.
+    Assumes the source is shared between the two languages
+    If an alphabet has been passed, add characters to that alphabet in order to build up  a communal alphabet
+    If not, create a new alphabet.
+    Adds of up to max_of_b lines from the second corpus.
+
+    Returns:
+    - the source and target vocab of words
+    - the updated alphabet
+    - sentence pairs for the two languages (which can be used as input data to the models)
+    '''
+
+
+    #The data is tab split i.e each line is "English Sentence \t Phrase Francais"
+    lines = open(corpusA,encoding='utf-8').read().strip().split('\n')
+
+
+    target_vocab = Vocab(target_lang)
+
+    if alphabet is None:
+        alphabet = Alphabet()
+
+    if source_vocab is None:
+        source_vocab = Vocab(source_lang)
+    
+    # print(lines)
+    count = 0
+    a_pairs = []
+    for line in lines:
+        sentences = line.split('\t')
+        source =  preprocess(sentences[0], source_lang)
+        target = preprocess(sentences[1], target_lang)
+        if meetsDataRequirements(source):
+            count += 1
+            a_pairs.append([source, target])
+            source_vocab.addSentence(source)
+            target_vocab.addSentence(target)
+            alphabet.addSentence(source)
+            alphabet.addSentence(target)
+
+
+    lines = open(corpusB,encoding='utf-8').read().strip().split('\n')
+    b_pairs = []
+    for line in lines:
+        sentences = line.split('\t')
+        source =  preprocess(sentences[0], source_lang)
+        target = preprocess(sentences[1], target_lang)
+        if meetsDataRequirements(source):
+            count += 1
+            b_pairs.append([source, target])
+            source_vocab.addSentence(source)
+            target_vocab.addSentence(target)
+            alphabet.addSentence(source)
+            alphabet.addSentence(target)
+
+
+    pairs =random.sample(a_pairs, min(max_of_a, len(a_pairs)))
+    pairs = pairs + (random.sample(b_pairs, min(max_of_b, len(b_pairs))))
+    print('Read %s / %s: Source Unique Words: %d Target Unique Words: %d Alphabet Unique Chars: %d Num Lines: %d' % (corpusA,corpusB,
+                                                                                                                source_vocab.n_words,
+                                                                                                                target_vocab.n_words,
+                                                                                                                alphabet.n_chars,
+                                                                                                                count))
     return source_vocab, target_vocab, alphabet, pairs
     
 
@@ -211,7 +273,6 @@ class EncoderRNN(nn.Module):
         self.input_size = input_size
 
         self.embedding = nn.Embedding(self.input_size, self.hidden_size)
-        #ToDo: Consider making input_size parameterizable.
         self.gru = nn.GRU(input_size=hidden_size, hidden_size=hidden_size)
     
     '''
@@ -250,21 +311,15 @@ class BahdanauAttention(nn.Module):
         projected_query = self.query_linear(query)
         projected_key = self.key_linear(key)
         scores = self.score_linear(torch.tanh(projected_query + projected_key))
-        # print(scores.size())
         scores = scores.squeeze(2).unsqueeze(1)
         attention_weights = func.softmax(scores, dim=-1)
-        # print(attention_weights.size())
-        # print(values.unsqueeze(0).size())
         context = torch.bmm(attention_weights, values.unsqueeze(0))
         self.attention_weights = attention_weights
-
 
         return attention_weights, context
 
 
-'''
-Implement a simple Decoder which uses a Gated Recurrent Unit
-'''
+
 class DecoderRNN(nn.Module):
     def __init__(self, hidden_size, output_size, attention = None):
         super(DecoderRNN, self).__init__()
@@ -393,8 +448,11 @@ class Translator():
                 loss_since_print = 0
                 print('%d %.4f' % (i, average_loss))
             
-            if i % plot_rate == 0 and i != 0:
-                average_loss = float(loss_since_plot) / plot_rate
+            if i % plot_rate == 0:
+                if i != 0:
+                    average_loss = float(loss_since_plot) / plot_rate
+                else:
+                    average_loss = float(loss_since_plot)
                 losses.append(average_loss)
                 loss_since_plot = 0
         
@@ -505,7 +563,7 @@ def baseline_word(label, src_vocab_B, target_vocab_B, train_X_B, test_X_B, iters
     translator = Translator(encoder, decoder, attention)
     losses = translator.train(train_X_B, iters_B, source_lang=src_vocab_B, target_lang=target_vocab_B)    
 
-    validation_bleu = translator.get_bleu(test_X_B, source_lang = source_vocab_B, target_lang = target_vocab_B)
+    validation_bleu = translator.get_bleu(test_X_B, source_lang = src_vocab_B, target_lang = target_vocab_B)
     #Clumsly make a local directory.
     dt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     dir_name = './%s_baseline_word_%s' % (label, dt)
@@ -518,7 +576,7 @@ def baseline_word(label, src_vocab_B, target_vocab_B, train_X_B, test_X_B, iters
     filename = '%s/translator_final.dump'  % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-    print("Final Loss: %d Validation Bleu: %d" % (losses[-1], validation_bleu))
+    print("Final Loss: %f Validation Bleu: %d" % (losses[-1], validation_bleu))
     print("==========")
     return losses, validation_bleu, translator
 
@@ -534,7 +592,7 @@ def baseline_char(label, alphabet, train_X_B, test_X_B, iters_B):
      - the translator itself.
     '''
     
-    hidden_size = 256
+    hidden_size = 64
     print("Experiment: Baseline [Char]")
     print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, 0, iters_B))
     print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH_CHAR))
@@ -559,7 +617,7 @@ def baseline_char(label, alphabet, train_X_B, test_X_B, iters_B):
     filename = '%s/translator_final.dump'  % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-    print("Final Loss: %d Validation Bleu: %d" % (losses[-1], validation_bleu))
+    print("Final Loss: %f Validation Bleu: %d" % (losses[-1], validation_bleu))
     print("==========")
     return losses, validation_bleu, translator
 
@@ -579,7 +637,7 @@ def transfer_all(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B):
      - the translator itself.
     '''
     
-    hidden_size = 256
+    hidden_size = 64
     print("Experiment: Transfer All")
     print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, iters_A, iters_B))
     print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH_CHAR))
@@ -605,7 +663,7 @@ def transfer_all(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B):
     filename = '%s/translator_final.dump'  % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-    print("Final Loss: %d Validation Bleu: %d" % (losses_B[-1], validation_bleu))
+    print("Final Loss: %f Validation Bleu: %d" % (losses_B[-1], validation_bleu))
     print("==========")
     return losses_B, validation_bleu, translator
     
@@ -627,7 +685,7 @@ def transfer_decoder(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B
      - the translator itself.
     '''
     
-    hidden_size = 256
+    hidden_size = 64
     print("Experiment: Transfer Decoder and Attention")
     print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, iters_A, iters_B))
     print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH_CHAR))
@@ -658,7 +716,7 @@ def transfer_decoder(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B
     filename = '%s/translator_final.dump' % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-    print("Final Loss: %d Validation Bleu: %d" % (losses_B[-1], validation_bleu))
+    print("Final Loss: %f Validation Bleu: %d" % (losses_B[-1], validation_bleu))
     print("==========")
     return losses_B, validation_bleu, translator
 
@@ -667,6 +725,8 @@ def transfer_attention_word(label, src_vocab_A, target_vocab_A, X_A, src_vocab_B
     Pretrain the encoder decoder translator on language set A (i.e English - Hungarian)
     Create a new model for the encoder and decoder, initiailze the attention to be the same as the trained attention.
     Then continue training full model on language set B (.e English - Finnish)
+
+    Allows for the source language for each set to be different. However it is unlikely this will achieve meaningul results.
 
     The translator for set B is the desired translator.
 
@@ -696,7 +756,7 @@ def transfer_attention_word(label, src_vocab_A, target_vocab_A, X_A, src_vocab_B
 
     losses_B = translator.train(train_X_B, iters_B, src_vocab_B, target_vocab_B)    
 
-    validation_bleu = translator.get_bleu(test_X_B, source_vocab_B, target_vocab_B)
+    validation_bleu = translator.get_bleu(test_X_B, src_vocab_B, target_vocab_B)
     #Clumsly make a local directory.
     dt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     dir_name = './%s_attention_word_%s' % (label, dt)
@@ -709,7 +769,7 @@ def transfer_attention_word(label, src_vocab_A, target_vocab_A, X_A, src_vocab_B
     filename = '%s/translator_final.dump' % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-    print("Final Loss: %d Validation Bleu: %d" % (losses_B[-1], validation_bleu))
+    print("Final Loss: %f Validation Bleu: %d" % (losses_B[-1], validation_bleu))
     print("==========")
     return losses_B, validation_bleu, translator
 
@@ -729,7 +789,7 @@ def transfer_attention_char(label, alphabet, X_A, train_X_B, test_X_B, iters_A, 
      - the translator itself.
     '''
     
-    hidden_size = 256
+    hidden_size = 64
     print("Experiment: Transfer Attention [CHAR]")
     print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, iters_A, iters_B))
     print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH_CHAR))
@@ -761,30 +821,29 @@ def transfer_attention_char(label, alphabet, X_A, train_X_B, test_X_B, iters_A, 
     filename = '%s/translator_final.dump' % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-    print("Final Loss: %d Validation Bleu: %d" % (losses_B[-1], validation_bleu))
+    print("Final Loss: %f Validation Bleu: %d" % (losses_B[-1], validation_bleu))
     print("==========")
     return losses_B, validation_bleu, translator
 
 #If going to transfer encoder/decoder, the encoder and decoder need to be the same dimensionality.
 #Further, we want the embeddings to be the same, otherwise we are relying on having a translation between multiple embeddings,
 #which creates a circular problem of needing a translator to create a translator.
-def transfer_encoder_attention(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B):
+def transfer_encoder_attention_char(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B):
     '''
     Pretrain the encoder decoder translator on language set A (i.e English - Hungarian)
-    Create a new model for the encoder and decoder, initiailze the attention to be the same as the trained attention.
+    Create a new model for the  decoder, initiailze the attention and encoder to be the same as the trained attention.
     Then continue training full model on language set B (.e English - Finnish)
 
     The translator for set B is the desired translator.
 
-    As different languages will have different embeddings in a word based model,
-    This method only works for character based models.
+    This method is for character based models. For word embeddings, use transfer_encoder_attention_word()
 
     Returns:
      - the negative log likelihood at each iteration of training in the second stage 
      - the bleu score found from the validation set provided.
      - the translator itself.
     '''
-    hidden_size = 256
+    hidden_size = 64
 
     print("Experiment: Transfer Encoder and Attention")
     print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, iters_A, iters_B))
@@ -817,16 +876,69 @@ def transfer_encoder_attention(label, alphabet, X_A, train_X_B, test_X_B, iters_
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
 
-    print("Final Loss: %d Validation Bleu: %d" % (losses_B[-1], validation_bleu))
+    print("Final Loss: %f Validation Bleu: %d" % (losses_B[-1], validation_bleu))
+    print("==========")
+    return losses_B, validation_bleu, translator
+
+def transfer_encoder_attention_word(label, src_vocab_A, target_vocab_A, X_A, target_vocab_B, train_X_B, test_X_B, iters_A, iters_B):
+    '''
+    Pretrain the encoder decoder translator on language set A (i.e English - Hungarian)
+    Create a new model for the decoder, initiailze the attention encoder to be the same as the trained attention.
+    Assumes that the source language for both sets is the same and has the same embedding.
+    Then continue training full model on language set B (.e English - Finnish)
+
+    The translator for set B is the desired translator.
+
+    This method is for word embeddings, for character based models use transfer_encoder_attention_char
+
+    Returns:
+     - the negative log likelihood at each iteration of training in the second stage 
+     - the bleu score found from the validation set provided.
+     - the translator itself.
+    '''
+    hidden_size = 256
+
+    print("Experiment: Transfer Encoder and Attention")
+    print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, iters_A, iters_B))
+    print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH_CHAR))
+    #PreTrain
+    encoder = EncoderRNN(src_vocab_A.n_words, hidden_size).to(device)
+    attention = BahdanauAttention(hidden_size).to(device)
+    decoder = DecoderRNN(hidden_size, target_vocab_A.n_words, attention).to(device)
+
+    translator = Translator(encoder, decoder, attention, max_sentence_length=MAX_SENTENCE_LENGTH_CHAR)
+    losses_A = translator.train(X_A, iters_A, source_lang=src_vocab_A, target_lang=target_vocab_A)
+
+    #Transfer
+    decoder = DecoderRNN(hidden_size, target_vocab_B.n_words, attention).to(device)
+    translator = Translator(encoder, decoder, attention, max_sentence_length=MAX_SENTENCE_LENGTH_CHAR)
+
+    losses_B = translator.train(train_X_B, iters_B,source_lang=src_vocab_A, target_lang = target_vocab_B)    
+
+    validation_bleu = translator.get_bleu(test_X_B,source_lang=src_vocab_A, target_lang=target_vocab_B)
+    #Clumsly make a local directory.
+    dt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    dir_name = './%s_encoder_word_%s' % (label, dt)
+    os.mkdir(dir_name)
+
+    filename = '%s/losses.dump' % (dir_name)
+    with open(filename, 'wb') as f:
+        pickle.dump(losses_B, f)
+
+    filename = '%s/translator_final.dump' % (dir_name)
+    with open(filename, 'wb') as f:
+        pickle.dump(translator, f)
+
+    print("Final Loss: %f Validation Bleu: %d" % (losses_B[-1], validation_bleu))
     print("==========")
     return losses_B, validation_bleu, translator
 
 
 def run_model_experiments(pretrain_iterations, test_iterations):
     #Hungarian
-    src_H, target_H, alph, X_H = readLangs('en-hu.txt', 'en', 'hu')
+    src, target_H, alph, X_H = readLangs('en-hu.txt', 'en', 'hu')
     #Finnish
-    src_F, target_F, alph, X_F = readLangs('en-fn.txt', 'en', 'fn', alph)
+    src, target_F, alph, X_F = readLangs('en-fn.txt', 'en', 'fn', alphabet=alph, source_vocab=src)
     
     train_X_F, test_X_F = train_test_split(X_F, test_size = 0.2, train_size=0.8)
 
@@ -834,12 +946,15 @@ def run_model_experiments(pretrain_iterations, test_iterations):
     dt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     fig, ax = plt.subplots()
 
-    losses, _ , _ = baseline_word('model_test', src_F, target_F,train_X_F, test_X_F, test_iterations)
+    losses, _ , _ = baseline_word('model_test', src, target_F,train_X_F, test_X_F, test_iterations)
     #Increment the x axis in steps of the default plot rate. This is a bit of a quick hack.
     ax.plot(np.arange(0,test_iterations,100), losses, label="Baseline")
 
-    losses, _, _ = transfer_attention_word('model_test', src_H, target_H, X_H, src_F, target_F, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    losses, _, _ = transfer_attention_word('model_test', src, target_H, X_H,src, target_F, train_X_F, test_X_F, pretrain_iterations, test_iterations)
     ax.plot(np.arange(0,test_iterations,100), losses, label="Pretrained Attention")
+
+    losses, _, _ = transfer_encoder_attention_word('model_test', src, target_H, X_H, target_F, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Pretrained Encoder and Attention")
 
     ax.set(xlabel='Epoch', ylabel='Average Negative Log Likelihood', title='Word Based Model Training Error')
     ax.legend()
@@ -855,7 +970,7 @@ def run_model_experiments(pretrain_iterations, test_iterations):
     losses, _, _ = transfer_all('model_test', alph, X_H, train_X_F, test_X_F, pretrain_iterations, test_iterations)
     ax.plot(np.arange(0,test_iterations,100), losses, label="Pretrained Whole Model")
 
-    losses, _, _ = transfer_encoder_attention('model_test', alph, X_H, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    losses, _, _ = transfer_encoder_attention_char('model_test', alph, X_H, train_X_F, test_X_F, pretrain_iterations, test_iterations)
     ax.plot(np.arange(0,test_iterations,100), losses, label="Pretrained Encoder and Attention")
 
     losses, _, _ = transfer_decoder('model_test', alph, X_H, train_X_F, test_X_F, pretrain_iterations, test_iterations)
@@ -866,31 +981,42 @@ def run_model_experiments(pretrain_iterations, test_iterations):
 
     ax.set(xlabel='Epoch', ylabel='Average Negative Log Likelihood', title='Char Based Model Training Error')
     ax.legend()
-    fig.savefig("word_based_models_%s.png" % (dt))
+    fig.savefig("char_based_models_%s.png" % (dt))
 
 
-def run_lang_experiments(pretrain_iterations, test_iterations):
+def run_lang_char_experiments(pretrain_iterations, test_iterations):
+    #Ensure that the alphabet and source vocab is shared amongst all language pairs
+    #That way we can transfer knowledge between them.
     #Hungarian
-    src_H, target_H, alph, X_H = readLangs('en-hu.txt', 'en', 'hu')
+    src, target_H, alph, X_H = readLangs('en-hu.txt', 'en', 'hu')
     #Finnish
-    src_F, target_F, alph, X_F = readLangs('en-fn.txt', 'en', 'fn', alph)
+    src, target_F, alph, X_F = readLangs('en-fn.txt', 'en', 'fn', alphabet=alph, source_vocab=src)
     #Estonian
-    src_E, target_E, alph, X_E = readLangs('en-es.txt', 'en', 'es', alph)
+    src, target_E, alph, X_E = readLangs('en-es.txt', 'en', 'es', alphabet=alph, source_vocab=src)
     #Swedish
-    src_SW, target_SW, alph, X_SW = readLangs('en-sw.txt', 'en', 'sw', alph)
+    src, target_SW, alph, X_SW = readLangs('en-sw.txt', 'en', 'sw', alphabet=alph, source_vocab=src)
     #Slovak
-    src_SK, target_SK, alph, X_SK = readLangs('en-sk.txt', 'en', 'sk', alph)
+    src, target_SK, alph, X_SK = readLangs('en-sk.txt', 'en', 'sk', alphabet=alph, source_vocab=src)
     #Czech
-    src_C, target_C, alph, X_C = readLangs('en-cz.txt', 'en', 'cz', alph)
+    src, target_C, alph, X_C = readLangs('en-cz.txt', 'en', 'cz', alphabet=alph, source_vocab=src)
 
     #Hungarian/Finnish
-    src_HF, target_HF, alph, X_HF = readComboLangs('en-hu.txt','en-fn.txt' 'en', 'hu-fn', alph)
+    src, target_HF, alph, X_HF = readComboLangs('en-hu.txt','en-fn.txt', 'en', 'hu-fn', 
+                                                alphabet=alph, source_vocab=src, 
+                                                max_of_a=(10*test_iterations), max_of_b=test_iterations)
+    src, target_FH, alph, X_FH = readComboLangs('en-fn.txt','en-hu.txt', 'en', 'fn-hu',
+                                                alphabet=alph, source_vocab=src,
+                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
 
     #Swedish/Finnish
-    src_SF, target_SF, alph, X_SF = readComboLangs('en-sw.txt','en-fn.txt' 'en', 'sw-fn', alph)
+    src, target_SF, alph, X_SF = readComboLangs('en-sw.txt','en-fn.txt', 'en', 'sw-fn',
+                                                alphabet=alph, source_vocab=src,
+                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
 
     #Czech/Hungarian
-    src_CH, target_CH, alph, X_CH = readComboLangs('en-hu.txt','en-cz.txt' 'en', 'cz-hu', alph)
+    src, target_CH, alph, X_CH = readComboLangs('en-cz.txt','en-hu.txt', 'en', 'cz-hu', 
+                                                alphabet=alph, source_vocab=src,
+                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
 
     train_X_H, test_X_H = train_test_split(X_H, test_size = 0.2, train_size=0.8)
 
@@ -899,42 +1025,140 @@ def run_lang_experiments(pretrain_iterations, test_iterations):
     # Finnish Translator Exps.
 
     # BASELINE EN - FI
-    baseline_char('en_fi', alph, train_X_F, test_X_F, test_iterations)
-    baseline_word('en_fi', src_F, target_F, train_X_F, test_X_F, test_iterations)
+    fig, ax = plt.subplots()
+    losses, _ , _  = baseline_char('en_fi', alph, train_X_F, test_X_F, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Baseline")
 
     # GENETIC EN - HU => EN - FI
-    transfer_all('hu-fi',alph, x_H, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    losses, _ , _  = transfer_all('hu-fi',alph, X_H, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Hungarian")
     # REGIONAL EN - SW => EN - FI
-    transfer_all('sw-fi',alph, x_SW, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    losses, _ , _  = transfer_all('sw-fi',alph, X_SW, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Swedish")
     # COMBO GENETIC EN - HU/FI => EN - FI
-    transfer_all('combo-hu-fi',alph, x_HF, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    losses, _ , _  = transfer_all('combo-hu-fi',alph, X_HF, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Combined Hungarian-Finnish")
 
     # COMBO REGIONAL EN - SW/FI => EN -FI
-    transfer_all('combo-sw-fi',alph, x_SF, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    losses, _ , _  = transfer_all('combo-sw-fi',alph, X_SF, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Combined Swedish-Finnish")
+    ax.set(xlabel='Epoch', ylabel='Average Negative Log Likelihood', title='Char Based Language Transfer Training Error')
+    ax.legend()
+    fig.savefig("finnish-lang-char.png")
+
+    # Hungarian Translator Exps.
+    fig, ax = plt.subplots()
+    # BASELINE EN - HU
+    losses, _ , _  = baseline_char('en_hu', alph, train_X, test_X, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Baseline")
+
+    # GENETIC EN - FI => EN - HU
+    losses, _ , _  = transfer_all('fi-hu',alph, X_F, train_X_H, test_X_H, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Finnish")
+
+    # REGIONAL EN - CZ => EN - HU
+    losses, _ , _  = transfer_all('cz-hu',alph, X_C, train_X_H, test_X_H, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Czech")
+
+    # COMBO GENETIC EN - HU/FI => EN - HU
+    losses, _ , _  = transfer_all('combo-fi-hu',alph, X_FH, train_X_H, test_X_H, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Combined Finnish-Hungarian")
+
+    # COMBO REGIONAL EN - CZ/HU => EN - HU
+    losses, _ , _  = transfer_all('combo-cz-hu',alph, X_CH, train_X_H, test_X_H, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Combined Czech-Hungarian")
+    ax.set(xlabel='Epoch', ylabel='Average Negative Log Likelihood', title='Char Based Language Transfer Training Error')
+    ax.legend()
+    fig.savefig("hungarian-lang-char.png")
+
+def run_lang_word_experiments(pretrain_iterations, test_iterations):
+    #Ensure that the alphabet and source vocab is shared amongst all language pairs
+    #That way we can transfer knowledge between them.
+    #Hungarian
+    src, target_H, alph, X_H = readLangs('en-hu.txt', 'en', 'hu')
+    #Finnish
+    src, target_F, alph, X_F = readLangs('en-fn.txt', 'en', 'fn', alphabet=alph, source_vocab=src)
+    #Swedish
+    src, target_SW, alph, X_SW = readLangs('en-sw.txt', 'en', 'sw', alphabet=alph, source_vocab=src)
+    #Czech
+    src, target_C, alph, X_C = readLangs('en-cz.txt', 'en', 'cz', alphabet=alph, source_vocab=src)
+
+    #Hungarian/Finnish
+    src, target_HF, alph, X_HF = readComboLangs('en-hu.txt','en-fn.txt', 'en', 'hu-fn', a
+                                                alphabet=alph, source_vocab=src,
+                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
+    src, target_FH, alph, X_FH = readComboLangs('en-fn.txt','en-hu.txt', 'en', 'fn-hu', 
+                                                alphabet=alph, source_vocab=src,
+                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
+
+    #Swedish/Finnish
+    src, target_SF, alph, X_SF = readComboLangs('en-sw.txt','en-fn.txt', 'en', 'sw-fn',
+                                                alphabet=alph, source_vocab=src,
+                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
+
+    #Czech/Hungarian
+    src, target_CH, alph, X_CH = readComboLangs('en-cz.txt','en-hu.txt', 'en', 'cz-hu', 
+                                                alphabet=alph, source_vocab=src,
+                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
+
+    train_X_H, test_X_H = train_test_split(X_H, test_size = 0.2, train_size=0.8)
+
+    train_X_F, test_X_F = train_test_split(X_F, test_size = 0.2, train_size=0.8)
+
+    # Finnish Translator Exps.
+
+    # BASELINE EN - FI
+    losses, _, _ = baseline_word('en_fi', src, target_F, train_X_F, test_X_F, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Baseline")
+
+    # GENETIC EN - HU => EN - FI
+    losses, _, _ = transfer_encoder_attention_word('hu-fi', src, target_H, X_H, target_F, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Hungarian")
+    # REGIONAL EN - SW => EN - FI
+    losses, _, _ = transfer_encoder_attention_word('sw-fi', src, target_SW, X_SW, target_F, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Swedish")
+    # COMBO GENETIC EN - HU/FI => EN - FI
+    losses, _, _ = transfer_encoder_attention_word('combo_hu-fi', src, target_HF, X_HF, target_F, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Combined Hungarian-Finnish")
+    # COMBO REGIONAL EN - SW/FI => EN -FI
+    losses, _, _ = transfer_encoder_attention_word('combo_sw-fi', src, target_SF, X_SF, target_F, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Combined Swedish-Finnish")
+    
+    ax.set(xlabel='Epoch', ylabel='Average Negative Log Likelihood', title='Word Based Language Transfer Training Error')
+    ax.legend()
+    fig.savefig("finnish-lang-word.png")
 
     # Hungarian Translator Exps.
 
     # BASELINE EN - HU
-    baseline_char('en_hu', alph, train_X, test_X, test_iterations)
-    baseline_word('en_hu', src_H, target_H, train_X_H, test_X_H, test_iterations)
+    losses, _, _ = baseline_word('en_hu', src, target_H, train_X_H, test_X_H, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Baseline")
 
     # GENETIC EN - FI => EN - HU
-
+    losses, _, _ = transfer_encoder_attention_word('fi-hu', src, target_F, X_F, target_H, train_X_H, test_X_H, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Finnish")
     # REGIONAL EN - CZ => EN - HU
-
+    losses, _, _ = transfer_encoder_attention_word('cz-hu', src, target_C, X_C, target_H, train_X_H, test_X_H, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Czech")
     # COMBO GENETIC EN - HU/FI => EN - HU
-
+    losses, _, _ = transfer_encoder_attention_word('combo_fi_hu', src, target_FH, X_FH, target_H, train_X_H, test_X_H, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Combined Finnish-Hungarian")
     # COMBO REGIONAL EN - CZ/HU => EN - HU
+    losses, _, _ = transfer_encoder_attention_word('combo_cz_hu', src, target_CH, X_CH, target_H, train_X_H, test_X_H, pretrain_iterations, test_iterations)
+    ax.plot(np.arange(0,test_iterations,100), losses, label="Combined Czech-Hungarian")
 
-def run_estonian_test():
-    #Estionain data set is particularly small, so would be interesting to use this as a final test.
-    pass
+    ax.set(xlabel='Epoch', ylabel='Average Negative Log Likelihood', title='Word Based Language Transfer Training Error')
+    ax.legend()
+    fig.savefig("hungarian-lang-word.png")
 
 
 def quick_test():
-
+    '''
+    For performing quick dev trials outside of the main method.
+    '''
     hidden_size = 64
-    src_H, target_H, alph, X = readLangs('en-fr.txt', 'en', 'fr')
+    src_H, target_H, alph, X = readLangs('en-hu.txt', 'en', 'hu')
+    # src_F, target_F, alph, X = readLangs('en-fn.txt', 'en', 'fn')
 
     print(X[0])
 
@@ -942,33 +1166,12 @@ def quick_test():
 
     print(train_X[0])
 
-    baseline_char('quick_test', alph, train_X, test_X, 75000)
+    baseline_char('quick_test', alph, train_X, test_X, 1000)
 
 
 if __name__ == "__main__":
 
     # quick_test()
-    run_model_experiments(1000, 1000)
-    # src, target, X = readLangs()
-    # hidden_size = 256
-    # encoder = EncoderRNN(src.n_words, hidden_size).to(device)
-    # attention = BahdanauAttention(hidden_size).to(device)
-    # decoder = DecoderRNN(hidden_size, target.n_words, attention).to(device)
-    # translator = Translator(encoder, decoder, attention)
-    # losses = translator.train(X, 75000, src, target, print_rate = 1000, plot_rate=500)
+    run_model_experiments(50000, 5000)
 
-    # save_model(encoder, 'encoder.p')
-    # save_model(decoder, 'decoder.p')
-    # save_model(attention, 'attention.p')
-    # english_sentence = 'I am cold'
-    # print(translator.predict(english_sentence, src, target))
-
-    # #This is just to test if the code works, actually need to properly remove a test set from training data.
-    # test_test_set = X[:100]
-    # print(translator.get_bleu(test_test_set, src, target))
-    
-    # fig, ax = plt.subplots()
-    # ax.plot(losses)
-    # ax.set(ylabel='Average Negative Log Likelihood')
-    # fig.savefig('loss.png')
 
