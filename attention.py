@@ -1006,17 +1006,17 @@ def run_lang_char_experiments(pretrain_iterations, test_iterations):
                                                 max_of_a=(10*test_iterations), max_of_b=test_iterations)
     src, target_FH, alph, X_FH = readComboLangs('en-fn.txt','en-hu.txt', 'en', 'fn-hu',
                                                 alphabet=alph, source_vocab=src,
-                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
+                                                max_of_a=(10*test_iterations), max_of_b=test_iterations)
 
     #Swedish/Finnish
     src, target_SF, alph, X_SF = readComboLangs('en-sw.txt','en-fn.txt', 'en', 'sw-fn',
                                                 alphabet=alph, source_vocab=src,
-                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
+                                                max_of_a=(10*test_iterations), max_of_b=test_iterations)
 
     #Czech/Hungarian
     src, target_CH, alph, X_CH = readComboLangs('en-cz.txt','en-hu.txt', 'en', 'cz-hu', 
                                                 alphabet=alph, source_vocab=src,
-                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
+                                                max_of_a=(10*test_iterations), max_of_b=test_iterations)
 
     train_X_H, test_X_H = train_test_split(X_H, test_size = 0.2, train_size=0.8)
 
@@ -1084,22 +1084,22 @@ def run_lang_word_experiments(pretrain_iterations, test_iterations):
     src, target_C, alph, X_C = readLangs('en-cz.txt', 'en', 'cz', alphabet=alph, source_vocab=src)
 
     #Hungarian/Finnish
-    src, target_HF, alph, X_HF = readComboLangs('en-hu.txt','en-fn.txt', 'en', 'hu-fn', a
+    src, target_HF, alph, X_HF = readComboLangs('en-hu.txt','en-fn.txt', 'en', 'hu-fn',
                                                 alphabet=alph, source_vocab=src,
-                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
+                                                max_of_a=(10*test_iterations), max_of_b=test_iterations)
     src, target_FH, alph, X_FH = readComboLangs('en-fn.txt','en-hu.txt', 'en', 'fn-hu', 
                                                 alphabet=alph, source_vocab=src,
-                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
+                                                max_of_a=(10*test_iterations), max_of_b=test_iterations)
 
     #Swedish/Finnish
     src, target_SF, alph, X_SF = readComboLangs('en-sw.txt','en-fn.txt', 'en', 'sw-fn',
                                                 alphabet=alph, source_vocab=src,
-                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
+                                                max_of_a=(10*test_iterations), max_of_b=test_iterations)
 
     #Czech/Hungarian
     src, target_CH, alph, X_CH = readComboLangs('en-cz.txt','en-hu.txt', 'en', 'cz-hu', 
                                                 alphabet=alph, source_vocab=src,
-                                                max_of_a=(10*test_iterations,) max_of_b=test_iterations)
+                                                max_of_a=(10*test_iterations), max_of_b=test_iterations)
 
     train_X_H, test_X_H = train_test_split(X_H, test_size = 0.2, train_size=0.8)
 
@@ -1172,6 +1172,6 @@ def quick_test():
 if __name__ == "__main__":
 
     # quick_test()
-    run_model_experiments(50000, 5000)
-
+    # run_model_experiments(50000, 5000)
+    run_lang_word_experiments(500, 100)
 
