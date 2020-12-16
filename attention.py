@@ -273,7 +273,7 @@ class EncoderRNN(nn.Module):
         self.input_size = input_size
 
         self.embedding = nn.Embedding(self.input_size, self.hidden_size)
-        self.gru = nn.GRU(input_size=hidden_size, hidden_size=hidden_size)
+        self.gru = nn.GRU(input_size=hidden_size, hidden_size=hidden_size, bidirectional=True)
     
     '''
     Forward step achieved by running the GRU layer 
@@ -346,7 +346,7 @@ class DecoderRNN(nn.Module):
             # print(output.size())
         else:
             output = func.relu(embedded)
-        output, hidden = self.gru(output, hidden)
+        output, hidden = self.gru(output, hidden, bidirectional=True)
         output = func.log_softmax(self.out(output[0]), dim = 1)
         return output, hidden, attention_weights  
 
