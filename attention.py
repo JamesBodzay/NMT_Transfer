@@ -28,7 +28,7 @@ import argparse
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+print('Running on %s' % (device))
 START_TOKEN_INDEX = 0
 END_TOKEN_INDEX = 1
 SPACE_TOKEN_INDEX = 2
@@ -273,7 +273,7 @@ class EncoderRNN(nn.Module):
         self.input_size = input_size
 
         self.embedding = nn.Embedding(self.input_size, self.hidden_size)
-        self.gru = nn.GRU(input_size=hidden_size, hidden_size=hidden_size, bidirectional=True)
+        self.gru = nn.GRU(input_size=hidden_size, hidden_size=hidden_size, bidirectional=False)
     
     '''
     Forward step achieved by running the GRU layer 
@@ -328,9 +328,9 @@ class DecoderRNN(nn.Module):
 
         self.embedding = nn.Embedding(self.output_size, self.hidden_size)
         if attention is not None:
-            self.gru = nn.GRU(hidden_size * 2, hidden_size)
+            self.gru = nn.GRU(hidden_size * 2, hidden_size, bidirectional=False)
         else:
-            self.gru = nn.GRU(hidden_size, hidden_size)
+            self.gru = nn.GRU(hidden_size, hidden_size, bidirectional=False)
         self.out = nn.Linear(hidden_size, output_size)
         self.softmax = nn.LogSoftmax(dim=1)
 
@@ -346,7 +346,7 @@ class DecoderRNN(nn.Module):
             # print(output.size())
         else:
             output = func.relu(embedded)
-        output, hidden = self.gru(output, hidden, bidirectional=True)
+        output, hidden = self.gru(output, hidden)
         output = func.log_softmax(self.out(output[0]), dim = 1)
         return output, hidden, attention_weights  
 
@@ -1106,6 +1106,7 @@ def run_lang_word_experiments(pretrain_iterations, test_iterations):
     train_X_F, test_X_F = train_test_split(X_F, test_size = 0.2, train_size=0.8)
 
     # Finnish Translator Exps.
+    fig, ax = plt.subplots()
 
     # BASELINE EN - FI
     losses, _, _ = baseline_word('en_fi', src, target_F, train_X_F, test_X_F, test_iterations)
@@ -1129,6 +1130,7 @@ def run_lang_word_experiments(pretrain_iterations, test_iterations):
     fig.savefig("finnish-lang-word.png")
 
     # Hungarian Translator Exps.
+    fig, ax = plt.subplots()
 
     # BASELINE EN - HU
     losses, _, _ = baseline_word('en_hu', src, target_H, train_X_H, test_X_H, test_iterations)
