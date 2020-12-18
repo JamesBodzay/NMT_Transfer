@@ -1,6 +1,11 @@
 '''
-The code written here is an adaptation of the tutorial provided by PyTorch for
-Neural Machine Translation with Attention
+The code written here uses the tutorial provided by PyTorch for
+Neural Machine Translation with Attention as inspiration and starting ground
+
+This code was written as course work for COMP550 at McGill University
+
+This was written to use tab seperated sentence pairs, specifically tested on the parallel corpora
+avialable at https://www.manythings.org/anki/ .
 '''
 from __future__ import unicode_literals, print_function, division
 
@@ -39,16 +44,17 @@ SPACE_TOKEN = " "
 MAX_SENTENCE_LENGTH=10
 MAX_SENTENCE_LENGTH_CHAR=60
 
-'''
-Represenetation of language which contains dictionaries to be able to translate between vector representation and 
-string representation
 
-Possible ToDos
-----
- - Train and use a word2vec model on all languages ( with supplemental data ) to use in place of this structure
- - Segment words into smaller tokens, represent words as combination of those vectors.
-'''
 class Vocab:
+    '''
+    Represenetation of language which contains dictionaries to be able to translate between vector representation and 
+    string representation
+
+    Possible ToDos
+    ----
+    - Train and use a word2vec model on all languages ( with supplemental data ) to use in place of this structure
+    - Segment words into smaller tokens, represent words as combination of those vectors.
+    '''
     def __init__(self, name):
         self.name = name
         self.n_words = 2
@@ -110,21 +116,23 @@ class Alphabet:
         return torch.tensor(indices, dtype=torch.long, device=device).view(-1, 1)
 
 
-'''
-This is just required for the quick test data. Actual data sets used may differ
-'''
+
 def unicodeToAscii(s):
+    '''
+    Convert unicode inputs to ascii.
+    Unnecessary when considering languages which employ diacritics/
+    '''
     return ''.join(
         c for c in unicodedata.normalize('NFD', s)
         if unicodedata.category(c) != 'Mn'
     )
 
 
-'''
-Preprocess sequence of words given language
-'''
-def preprocess(sentence, language = 'unspecified', use_diacritics = True):
 
+def preprocess(sentence, language = 'unspecified', use_diacritics = True):
+    '''
+    Preprocess sequence of words given language
+    '''
     # print("in: %s" %(sentence))
     if use_diacritics:
         sentence = re.sub(r"([.!?])", r" \1", sentence)
@@ -138,10 +146,11 @@ def preprocess(sentence, language = 'unspecified', use_diacritics = True):
 
     return sentence
 
-'''
-Only accept a subset of the data to make training times shorter.
-'''
+
 def meetsDataRequirements(sentence):
+    '''
+    Limit the length of sentences to allow for reasonable training times.
+    '''
     if len(sentence.split(' ')) < MAX_SENTENCE_LENGTH and len(sentence) < MAX_SENTENCE_LENGTH_CHAR:
         return True
     return False
@@ -259,15 +268,21 @@ def readComboLangs(corpusA,corpusB, source_lang, target_lang, alphabet = None, s
                                                                                                                 count))
     return source_vocab, target_vocab, alphabet, pairs
     
+'''
+
+NMT Encoder Decoder Model
 
 '''
-Implement an Encoder which inherits from the default EncoderRNN provided by torch.nn.Module
-This implementation replaces the forward step with a GRU network
 
-This is a uni directional encoder. Some improvement might be made by having a bi-directional encoder instead.
-'''
+
 class EncoderRNN(nn.Module):
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size):     
+        '''
+        Implement an Encoder which inherits from the default EncoderRNN provided by torch.nn.Module
+        This implementation replaces the forward step with a GRU network
+
+        This is a uni directional encoder. Some improvement might be made by having a bi-directional encoder instead.
+        '''
         super(EncoderRNN, self).__init__()
         self.hidden_size = hidden_size
         self.input_size = input_size
@@ -289,6 +304,13 @@ class EncoderRNN(nn.Module):
     
 class BahdanauAttention(nn.Module):
     def __init__(self, hidden_size, key_size = None, query_size = None):
+        '''
+        Attention mechanism based on Neural Machine Translation By Jointly Learning to Align and Translate,
+        Bahdanau et al.
+        Attention weights are determined by passing keys and queries through a feed forward neural network 
+        with tanh activation function as non-linearity, normalized via soft max.
+        Context vector is the dot product of these attention weights with the values
+        '''
         super(BahdanauAttention, self).__init__()
         
         if key_size is None:
@@ -296,7 +318,7 @@ class BahdanauAttention(nn.Module):
         if query_size is None:
             query_size = hidden_size
 
-        print('Query Size: %d Key_size: %d Hidden Size %d' % (query_size, key_size, hidden_size))
+        # print('Query Size: %d Key_size: %d Hidden Size %d' % (query_size, key_size, hidden_size))
         self.key_linear = nn.Linear(key_size, hidden_size, bias = False)
         self.query_linear = nn.Linear(query_size, hidden_size, bias = False)
         self.score_linear = nn.Linear(hidden_size, 1, bias=False)
@@ -322,6 +344,12 @@ class BahdanauAttention(nn.Module):
 
 class DecoderRNN(nn.Module):
     def __init__(self, hidden_size, output_size, attention = None):
+        '''
+        Decoder RNN uses Gated Recurrent Units to map the encoder output to
+        decoded output. If an attention mechanism is passed to the encoder,
+        the context vector determined by the mechanism is appended to the input before
+        being passed to the GRU. All inputs are subjected to a rectifier before being considered.
+        '''
         super(DecoderRNN, self).__init__()
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -458,21 +486,29 @@ class Translator():
         
         return losses
 
-    def predict(self, input, source_lang = None, target_lang = None, alphabet = None):
+    def predict(self, input, actual=None, source_lang = None, target_lang = None, alphabet = None):
         '''
         Given the trained encooder decoder, predict the target lang version of the input sentence.
 
-        Returns the prediction
+        Returns the prediction and the negative log likelihood of the actual value of the actual sentence
         '''
         decoded_output = []
+        target_tensor = None
+        loss = 0
         if alphabet is not None:
             source_tensor = alphabet.sentenceTensor(input)
+            if actual is not None:
+                target_tensor = alphabet.sentenceTensor(actual)
         elif source_lang is not None and target_lang is not None:
             source_tensor = source_lang.sentenceTensor(input)
+            if actual is not None:
+                target_tensor = target_lang.sentenceTensor(actual)
         else:
             print('No vocabulary or alphabet provided. Cannot create tensors from sentences.')
             return None
         source_length = source_tensor.size(0)
+        if target_tensor is not None:
+            target_length = target_tensor.size(0)
 
         with torch.no_grad():
             encoder_hidden = self.encoder.initHidden()
@@ -495,6 +531,8 @@ class Translator():
                 # print(topi)
                 #Get the index in the embedding in the target language
                 decoder_input = topi.squeeze().detach()
+                if target_tensor is not None and di < target_length:
+                    loss += self.criterion(decoder_output, target_tensor[di])
 
                 if decoder_input.item() == END_TOKEN_INDEX:
                     break
@@ -505,29 +543,40 @@ class Translator():
                 else:
                     print('No alphabet or target vocab provided. Unable to de-embed output.')
             # print(decoded_output)            
-        return decoded_output
+        return decoded_output, loss
 
     def get_bleu(self, X, source_lang=None, target_lang=None,alphabet = None):
+        '''
+        Gets the bleu score according to sacrebleu, as well as the negative log likelihood of
+        the actual target sentence as we have that available.
+        '''
         predictions = []
         targets = []
+        total_loss = 0
         for x in X:
             source = x[0]
+            target = x[1]
             #Might need to detokenize here...
-            targets.append(x[1])
+            targets.append(target)
+            loss = 0
             if alphabet is not None:
                 #If translation is character based then spaces will be included in the translation
-                predictions.append(''.join(self.predict(source, alphabet=alphabet)))
+                decoded_output, loss = self.predict(source,target, alphabet=alphabet)
+                predictions.append(''.join(decoded_output))
             elif source_lang is not None and target_lang is not None:
                 #If translation is word based, add space inbetween words in translation
-                predictions.append(' '.join(self.predict(source, source_lang, target_lang)))
+                decoded_output, loss = self.predict(source, target, source_lang, target_lang)
+                predictions.append(' '.join(decoded_output))
             else:
                 print('No alphabet or vocabulary provided, unable to create predictions.')
+            total_loss += loss
+        average_loss = float(total_loss)/len(X)
 
         targets = [targets]
         # print(targets[:10])
         print(predictions[:10])
         bleu = sacrebleu.corpus_bleu(predictions, targets)
-        return bleu.score
+        return bleu.score, average_loss
 
 
 
@@ -539,6 +588,12 @@ def load_model(filename):
     with open(filename, 'rb') as f:
         model = pickle.load(f)
     return model
+
+'''
+
+Model Transfer Experiments
+
+'''
 
 def baseline_word(label, src_vocab_B, target_vocab_B, train_X_B, test_X_B, iters_B):
     '''
@@ -553,6 +608,7 @@ def baseline_word(label, src_vocab_B, target_vocab_B, train_X_B, test_X_B, iters
     '''
     
     hidden_size = 256
+    print('========')
     print("Experiment: Baseline [Word]")
     print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, 0, iters_B))
     print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH))
@@ -563,7 +619,7 @@ def baseline_word(label, src_vocab_B, target_vocab_B, train_X_B, test_X_B, iters
     translator = Translator(encoder, decoder, attention)
     losses = translator.train(train_X_B, iters_B, source_lang=src_vocab_B, target_lang=target_vocab_B)    
 
-    validation_bleu = translator.get_bleu(test_X_B, source_lang = src_vocab_B, target_lang = target_vocab_B)
+    test_bleu, average_test_loss = translator.get_bleu(test_X_B, source_lang = src_vocab_B, target_lang = target_vocab_B)
     #Clumsly make a local directory.
     dt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     dir_name = './%s_baseline_word_%s' % (label, dt)
@@ -576,9 +632,9 @@ def baseline_word(label, src_vocab_B, target_vocab_B, train_X_B, test_X_B, iters
     filename = '%s/translator_final.dump'  % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-    print("Final Loss: %f Validation Bleu: %d" % (losses[-1], validation_bleu))
+    print("Final Train Loss: %f Test Bleu: %f, Average Test Negative Log Likelihood: %f" % (losses[-1], test_bleu, average_test_loss))
     print("==========")
-    return losses, validation_bleu, translator
+    return losses, test_bleu, translator
 
 def baseline_char(label, alphabet, train_X_B, test_X_B, iters_B):
     '''
@@ -593,6 +649,7 @@ def baseline_char(label, alphabet, train_X_B, test_X_B, iters_B):
     '''
     
     hidden_size = 64
+    print('========')
     print("Experiment: Baseline [Char]")
     print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, 0, iters_B))
     print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH_CHAR))
@@ -604,7 +661,7 @@ def baseline_char(label, alphabet, train_X_B, test_X_B, iters_B):
     translator = Translator(encoder, decoder, attention, max_sentence_length=MAX_SENTENCE_LENGTH_CHAR)
     losses = translator.train(train_X_B, iters_B, alphabet=alphabet)    
 
-    validation_bleu = translator.get_bleu(test_X_B, alphabet=alphabet)
+    test_bleu, average_test_loss = translator.get_bleu(test_X_B, alphabet=alphabet)
     #Clumsly make a local directory.
     dt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     dir_name = './%s_baseline_char_%s' % (label, dt)
@@ -617,9 +674,9 @@ def baseline_char(label, alphabet, train_X_B, test_X_B, iters_B):
     filename = '%s/translator_final.dump'  % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-    print("Final Loss: %f Validation Bleu: %d" % (losses[-1], validation_bleu))
+    print("Final Train Loss: %f Test Bleu: %f, Average Test Negative Log Likelihood: %f" % (losses[-1], test_bleu, average_test_loss))
     print("==========")
-    return losses, validation_bleu, translator
+    return losses, test_bleu, translator
 
 def transfer_all(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B):
     '''
@@ -638,6 +695,7 @@ def transfer_all(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B):
     '''
     
     hidden_size = 64
+    print('========')
     print("Experiment: Transfer All")
     print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, iters_A, iters_B))
     print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH_CHAR))
@@ -650,7 +708,7 @@ def transfer_all(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B):
 
     losses_B = translator.train(train_X_B, iters_B, alphabet=alphabet)    
 
-    validation_bleu = translator.get_bleu(test_X_B, alphabet=alphabet)
+    test_bleu, average_test_loss = translator.get_bleu(test_X_B, alphabet=alphabet)
     #Clumsly make a local directory.
     dt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     dir_name = './%s_all_%s' % (label, dt)
@@ -663,9 +721,9 @@ def transfer_all(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B):
     filename = '%s/translator_final.dump'  % (dir_name)
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
-    print("Final Loss: %f Validation Bleu: %d" % (losses_B[-1], validation_bleu))
+    print("Final Train Loss: %f Test Bleu: %f, Average Test Negative Log Likelihood: %f" % (losses_B[-1], test_bleu, average_test_loss))
     print("==========")
-    return losses_B, validation_bleu, translator
+    return losses_B, test_bleu, translator
     
 
 def transfer_decoder(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B):
@@ -703,7 +761,7 @@ def transfer_decoder(label, alphabet, X_A, train_X_B, test_X_B, iters_A, iters_B
 
     losses_B = translator.train(train_X_B, iters_B,alphabet=alphabet)    
 
-    validation_bleu = translator.get_bleu(test_X_B, alphabet=alphabet)
+    validation_bleu, _ = translator.get_bleu(test_X_B, alphabet=alphabet)
     #Clumsly make a local directory.
     dt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     dir_name = './%s_decoder_%s' % (label, dt)
@@ -756,7 +814,7 @@ def transfer_attention_word(label, src_vocab_A, target_vocab_A, X_A, src_vocab_B
 
     losses_B = translator.train(train_X_B, iters_B, src_vocab_B, target_vocab_B)    
 
-    validation_bleu = translator.get_bleu(test_X_B, src_vocab_B, target_vocab_B)
+    validation_bleu, _ = translator.get_bleu(test_X_B, src_vocab_B, target_vocab_B)
     #Clumsly make a local directory.
     dt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     dir_name = './%s_attention_word_%s' % (label, dt)
@@ -808,7 +866,7 @@ def transfer_attention_char(label, alphabet, X_A, train_X_B, test_X_B, iters_A, 
 
     losses_B = translator.train(train_X_B, iters_B, alphabet = alphabet)    
 
-    validation_bleu = translator.get_bleu(test_X_B, alphabet = alphabet)
+    validation_bleu, _ = translator.get_bleu(test_X_B, alphabet = alphabet)
     #Clumsly make a local directory.
     dt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     dir_name = './%s_attention_char_%s' % (label, dt)
@@ -862,7 +920,7 @@ def transfer_encoder_attention_char(label, alphabet, X_A, train_X_B, test_X_B, i
 
     losses_B = translator.train(train_X_B, iters_B,alphabet=alphabet)    
 
-    validation_bleu = translator.get_bleu(test_X_B, alphabet=alphabet)
+    validation_bleu, _ = translator.get_bleu(test_X_B, alphabet=alphabet)
     #Clumsly make a local directory.
     dt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     dir_name = './%s_encoder_%s' % (label, dt)
@@ -897,7 +955,7 @@ def transfer_encoder_attention_word(label, src_vocab_A, target_vocab_A, X_A, tar
      - the translator itself.
     '''
     hidden_size = 256
-
+    print('========')
     print("Experiment: Transfer Encoder and Attention")
     print("Label: %s PreTrain Iters: %d FinalTrain Iters: %d" % (label, iters_A, iters_B))
     print("Hidden Size: %d Max Sentence Length: %d" % (hidden_size, MAX_SENTENCE_LENGTH_CHAR))
@@ -915,7 +973,7 @@ def transfer_encoder_attention_word(label, src_vocab_A, target_vocab_A, X_A, tar
 
     losses_B = translator.train(train_X_B, iters_B,source_lang=src_vocab_A, target_lang = target_vocab_B)    
 
-    validation_bleu = translator.get_bleu(test_X_B,source_lang=src_vocab_A, target_lang=target_vocab_B)
+    test_bleu, average_test_loss = translator.get_bleu(test_X_B,source_lang=src_vocab_A, target_lang=target_vocab_B)
     #Clumsly make a local directory.
     dt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     dir_name = './%s_encoder_word_%s' % (label, dt)
@@ -929,9 +987,9 @@ def transfer_encoder_attention_word(label, src_vocab_A, target_vocab_A, X_A, tar
     with open(filename, 'wb') as f:
         pickle.dump(translator, f)
 
-    print("Final Loss: %f Validation Bleu: %d" % (losses_B[-1], validation_bleu))
+    print("Final Train Loss: %f Test Bleu: %f, Average Test Negative Log Likelihood: %f" % (losses_B[-1], test_bleu, average_test_loss))
     print("==========")
-    return losses_B, validation_bleu, translator
+    return losses_B, test_bleu, translator
 
 
 def run_model_experiments(pretrain_iterations, test_iterations):
@@ -1151,29 +1209,32 @@ def run_lang_word_experiments(pretrain_iterations, test_iterations):
 
     ax.set(xlabel='Epoch', ylabel='Average Negative Log Likelihood', title='Word Based Language Transfer Training Error')
     ax.legend()
-    fig.savefig("hungarian-lang-word.png")
+    fig.savefig("hungarian-lang-word.png") 
 
+def final_tests(pretrain_iterations, test_iterations):
+    src, target_F, alph, X_F = readLangs('en-fn.txt', 'en', 'fn')
+    src, target_HF, alph, X_HF = readComboLangs('en-hu.txt','en-fn.txt', 'en', 'hu-fn',
+                                                alphabet=alph, source_vocab=src,
+                                                max_of_a=(10*test_iterations), max_of_b=test_iterations)
 
-def quick_test():
-    '''
-    For performing quick dev trials outside of the main method.
-    '''
-    hidden_size = 64
-    src_H, target_H, alph, X = readLangs('en-hu.txt', 'en', 'hu')
-    # src_F, target_F, alph, X = readLangs('en-fn.txt', 'en', 'fn')
+    src, target_SF, alph, X_SF = readComboLangs('en-sw.txt','en-fn.txt', 'en', 'sw-fn',
+                                                alphabet=alph, source_vocab=src,
+                                                max_of_a=(10*test_iterations), max_of_b=test_iterations)
+    train_X_F, test_X_F = train_test_split(X_F, test_size = 0.2, train_size=0.8)
 
-    print(X[0])
+    # baseline_word('en_fi', src, target_F, train_X_F, test_X_F, test_iterations)
+    transfer_encoder_attention_word('combo_hu-fi', src, target_HF, X_HF, target_F, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    transfer_encoder_attention_word('combo_sw-fi', src, target_SF, X_SF, target_F, train_X_F, test_X_F, pretrain_iterations, test_iterations)
 
-    train_X, test_X = train_test_split(X, test_size = 0.2, train_size=0.8)
-
-    print(train_X[0])
-
-    baseline_char('quick_test', alph, train_X, test_X, 1000)
-
+    baseline_char('en_fi', alph, train_X_F, test_X_F, test_iterations)
+    transfer_all('combo-hu-fi',alph, X_HF, train_X_F, test_X_F, pretrain_iterations, test_iterations)
+    transfer_all('combo-sw-fi',alph, X_SF, train_X_F, test_X_F, pretrain_iterations, test_iterations)
 
 if __name__ == "__main__":
 
-    # quick_test()
-    # run_model_experiments(50000, 5000)
-    run_lang_word_experiments(500, 100)
-
+    # To do: use argparse to create a useable interface for training new models
+    # And for running these prebatched experiments
+    # For now, simply uncomment the lines to run the desired experiments.
+    # run_model_experiments(30000, 10000)
+    # run_lang_word_experiments(30000, 10000)
+    final_tests(30000, 10000)
